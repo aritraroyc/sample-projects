@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  java-error-checker-mcp:
+    build: .
+    image: java-error-checker-mcp:latest
+    container_name: java-error-checker-mcp
+    volumes:
+      # Mount workspace directory
+      - ./workspaces:/tmp/jdtls-workspaces
+      # Mount logs
+      - ./logs:/var/log/mcp
+    environment:
+      - JDTLS_WORKSPACE_DIR=/tmp/jdtls-workspaces
+      - SESSION_TIMEOUT=3600
+      - JDTLS_PATH=/opt/jdtls
+      - LOG_FILE=/var/log/mcp/java-error-checker.log
+      - LOG_LEVEL=INFO
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
