@@ -176,6 +176,66 @@ class JavaErrorCheckerServer:
                         },
                         "required": ["session_id", "error"]
                     }
+                ),
+                Tool(
+                    name="write_multiple_files",
+                    description="Write multiple Java source files to the session workspace in a batch operation. Ideal for agentic workflows that generate multiple classes at once.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "session_id": {
+                                "type": "string",
+                                "description": "Session ID from create_session"
+                            },
+                            "files": {
+                                "type": "array",
+                                "description": "Array of file objects to write",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "file_path": {
+                                            "type": "string",
+                                            "description": "Relative path to Java file (e.g., 'com/example/Main.java')"
+                                        },
+                                        "content": {
+                                            "type": "string",
+                                            "description": "Java source code content"
+                                        }
+                                    },
+                                    "required": ["file_path", "content"]
+                                }
+                            }
+                        },
+                        "required": ["session_id", "files"]
+                    }
+                ),
+                Tool(
+                    name="refresh_session",
+                    description="Refresh a session to extend its timeout. Use this in long-running agentic workflows to prevent session cleanup.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "session_id": {
+                                "type": "string",
+                                "description": "Session ID to refresh"
+                            }
+                        },
+                        "required": ["session_id"]
+                    }
+                ),
+                Tool(
+                    name="get_session_info",
+                    description="Get detailed information about a session including age, file count, and workspace details",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "session_id": {
+                                "type": "string",
+                                "description": "Session ID"
+                            }
+                        },
+                        "required": ["session_id"]
+                    }
                 )
             ]
 
@@ -187,6 +247,8 @@ class JavaErrorCheckerServer:
                     return await self._handle_create_session(arguments)
                 elif name == "write_java_file":
                     return await self._handle_write_java_file(arguments)
+                elif name == "write_multiple_files":
+                    return await self._handle_write_multiple_files(arguments)
                 elif name == "check_errors":
                     return await self._handle_check_errors(arguments)
                 elif name == "list_files":
@@ -197,6 +259,10 @@ class JavaErrorCheckerServer:
                     return await self._handle_delete_session(arguments)
                 elif name == "get_recommendations":
                     return await self._handle_get_recommendations(arguments)
+                elif name == "refresh_session":
+                    return await self._handle_refresh_session(arguments)
+                elif name == "get_session_info":
+                    return await self._handle_get_session_info(arguments)
                 else:
                     return [TextContent(type="text", text=f"Unknown tool: {name}")]
             except Exception as e:
@@ -336,6 +402,71 @@ class JavaErrorCheckerServer:
             "error": error,
             "recommendations": recommendations
         }
+
+        return [TextContent(type="text", text=str(response))]
+
+    async def _handle_write_multiple_files(self, arguments: Dict[str, Any]) -> list[TextContent]:
+        """Handle write_multiple_files tool call."""
+        session_id = arguments["session_id"]
+        files = arguments["files"]
+
+        result = self.session_manager.write_multiple_files(session_id, files)
+
+        if result.get("success"):
+            response = {
+                "status": "success",
+                "session_id": session_id,
+                "written": result["written"],
+                "failed": result["failed"],
+                "total": result["total"],
+                "message": f"Batch write complete: {result['written']} files written, {result['failed']} failed"
+            }
+            if "failed_files" in result:
+                response["failed_files"] = result["failed_files"]
+        else:
+            response = {
+                "status": "error",
+                "message": result.get("error", "Failed to write files")
+            }
+
+        return [TextContent(type="text", text=str(response))]
+
+    async def _handle_refresh_session(self, arguments: Dict[str, Any]) -> list[TextContent]:
+        """Handle refresh_session tool call."""
+        session_id = arguments["session_id"]
+
+        success = self.session_manager.refresh_session(session_id)
+
+        if success:
+            response = {
+                "status": "success",
+                "session_id": session_id,
+                "message": "Session timeout refreshed successfully"
+            }
+        else:
+            response = {
+                "status": "error",
+                "message": f"Session {session_id} not found"
+            }
+
+        return [TextContent(type="text", text=str(response))]
+
+    async def _handle_get_session_info(self, arguments: Dict[str, Any]) -> list[TextContent]:
+        """Handle get_session_info tool call."""
+        session_id = arguments["session_id"]
+
+        info = self.session_manager.get_session_info(session_id)
+
+        if info:
+            response = {
+                "status": "success",
+                **info
+            }
+        else:
+            response = {
+                "status": "error",
+                "message": f"Session {session_id} not found"
+            }
 
         return [TextContent(type="text", text=str(response))]
 

@@ -157,6 +157,78 @@ class SessionManager:
             logger.error(f"Error writing file {file_path}: {e}")
             return False
 
+    def write_multiple_files(self, session_id: str, files: List[Dict[str, str]]) -> Dict[str, any]:
+        """
+        Write multiple Java files to the session workspace in a batch operation.
+
+        Args:
+            session_id: Session ID
+            files: List of dicts with 'file_path' and 'content' keys
+
+        Returns:
+            Dict with success count, failure count, and details
+        """
+        session = self.get_session(session_id)
+        if not session:
+            logger.error(f"Session {session_id} not found")
+            return {
+                "success": False,
+                "error": "Session not found",
+                "written": 0,
+                "failed": 0
+            }
+
+        written = 0
+        failed = 0
+        failed_files = []
+
+        for file_info in files:
+            file_path = file_info.get("file_path")
+            content = file_info.get("content")
+
+            if not file_path or content is None:
+                failed += 1
+                failed_files.append({
+                    "file_path": file_path or "unknown",
+                    "error": "Missing file_path or content"
+                })
+                continue
+
+            # Determine full path (default to src/main/java)
+            if not file_path.startswith("src/"):
+                full_path = session.workspace_path / "src" / "main" / "java" / file_path
+            else:
+                full_path = session.workspace_path / file_path
+
+            # Ensure parent directories exist
+            full_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Write file
+            try:
+                full_path.write_text(content, encoding='utf-8')
+                written += 1
+                logger.info(f"Wrote file {file_path} to session {session_id}")
+            except Exception as e:
+                failed += 1
+                failed_files.append({
+                    "file_path": file_path,
+                    "error": str(e)
+                })
+                logger.error(f"Error writing file {file_path}: {e}")
+
+        result = {
+            "success": True,
+            "written": written,
+            "failed": failed,
+            "total": len(files)
+        }
+
+        if failed_files:
+            result["failed_files"] = failed_files
+
+        logger.info(f"Batch write to session {session_id}: {written} written, {failed} failed")
+        return result
+
     def read_file(self, session_id: str, file_path: str) -> Optional[str]:
         """
         Read a file from the session workspace.
@@ -217,6 +289,58 @@ class SessionManager:
         """
         session = self.get_session(session_id)
         return session.workspace_path if session else None
+
+    def refresh_session(self, session_id: str) -> bool:
+        """
+        Refresh a session to extend its timeout.
+        This is useful for long-running agentic workflows.
+
+        Args:
+            session_id: Session ID
+
+        Returns:
+            True if session was refreshed, False if not found
+        """
+        import time
+
+        session = self.sessions.get(session_id)
+        if not session:
+            return False
+
+        session.last_accessed = time.time()
+        logger.info(f"Refreshed session {session_id}")
+        return True
+
+    def get_session_info(self, session_id: str) -> Optional[Dict[str, any]]:
+        """
+        Get detailed information about a session.
+
+        Args:
+            session_id: Session ID
+
+        Returns:
+            Dict with session information or None if not found
+        """
+        import time
+
+        session = self.sessions.get(session_id)
+        if not session:
+            return None
+
+        current_time = time.time()
+        java_files = self.list_files(session_id)
+
+        return {
+            "session_id": session.session_id,
+            "project_name": session.project_name,
+            "workspace_path": str(session.workspace_path),
+            "created_at": session.created_at,
+            "last_accessed": session.last_accessed,
+            "age_seconds": current_time - session.created_at,
+            "idle_seconds": current_time - session.last_accessed,
+            "file_count": len(java_files),
+            "files": java_files
+        }
 
     def cleanup_old_sessions(self, max_age_seconds: int = 3600):
         """

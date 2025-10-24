@@ -10,6 +10,12 @@ A Python-based Model Context Protocol (MCP) server that provides Java compilatio
 - **Error Recommendations**: Provides intelligent suggestions for fixing common errors
 - **Multi-file Support**: Handle complex projects with multiple Java source files
 - **File Operations**: Read, write, and list Java files in session workspaces
+- **Batch File Writing**: Write multiple Java files in a single operation (ideal for agentic workflows)
+- **Session Persistence**: Sessions persist across multiple operations for incremental code generation
+- **Session Refresh**: Extend session timeout for long-running agentic workflows
+- **Session Tracking**: Monitor session state, file count, and workspace details
+
+> **For Agentic Workflows**: See [AGENTIC_WORKFLOWS.md](AGENTIC_WORKFLOWS.md) for detailed guidance on using this service in multi-stage code generation workflows.
 
 ## Architecture
 
@@ -196,6 +202,76 @@ Get recommendations for fixing a specific compilation error.
 **Parameters:**
 - `session_id` (required): Session ID
 - `error` (required): Error object from `check_errors`
+
+#### 8. `write_multiple_files` ⭐ New
+
+Write multiple Java source files in a batch operation. Ideal for agentic workflows generating multiple classes at once.
+
+**Parameters:**
+- `session_id` (required): Session ID
+- `files` (required): Array of file objects with `file_path` and `content`
+
+**Example:**
+```json
+{
+  "session_id": "uuid-string",
+  "files": [
+    {
+      "file_path": "com/example/User.java",
+      "content": "package com.example; ..."
+    },
+    {
+      "file_path": "com/example/Product.java",
+      "content": "package com.example; ..."
+    }
+  ]
+}
+```
+
+**Returns:**
+```json
+{
+  "status": "success",
+  "written": 2,
+  "failed": 0,
+  "total": 2
+}
+```
+
+#### 9. `refresh_session` ⭐ New
+
+Refresh a session to extend its timeout. Essential for long-running agentic workflows.
+
+**Parameters:**
+- `session_id` (required): Session ID
+
+**Returns:**
+```json
+{
+  "status": "success",
+  "message": "Session timeout refreshed successfully"
+}
+```
+
+#### 10. `get_session_info` ⭐ New
+
+Get detailed information about a session including age, file count, and workspace details.
+
+**Parameters:**
+- `session_id` (required): Session ID
+
+**Returns:**
+```json
+{
+  "status": "success",
+  "session_id": "uuid-string",
+  "project_name": "my-project",
+  "age_seconds": 120.5,
+  "idle_seconds": 5.2,
+  "file_count": 5,
+  "files": ["com/example/Main.java", ...]
+}
+```
 
 ## Example Workflow
 
